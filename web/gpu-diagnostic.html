@@ -1,0 +1,28 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>MusicAR — diagnostic GPU</title><body><pre id="result">Initialisation GPU…</pre><script type="module">
+const params=new URL(location.href).searchParams,nonce=params.get("nonce"),worker=new Worker("/static/hand-worker.js");
+const delegate=params.get("delegate")||"GPU";
+const image=new Image();image.src="/api/diagnostic/reference";await image.decode();
+const times=[],handCounts=[],latencies=[];let info,started,socket;
+async function finish(result){worker.terminate();socket?.close();document.querySelector("#result").textContent=JSON.stringify(result,null,2);await fetch("/api/diagnostic/gpu",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...result,nonce})});}
+async function frame(){started=performance.now();const bitmap=await createImageBitmap(image,{resizeWidth:640,resizeHeight:Math.round(640*image.naturalHeight/image.naturalWidth)});worker.postMessage({kind:"frame",bitmap,timestamp:performance.now()},[bitmap]);}
+async function resultFrame(result){times.push(result.inference_ms);handCounts.push(result.hands.length);latencies.push(performance.now()-started);if(times.length<30)return frame();
+  const steady=times.slice(10),roundtrip=latencies.slice(10);await finish({ok:result.hands.length===2,delegate:info.delegate,renderer:info.renderer,
+    hands:result.hands.length,landmarks:result.hands.map(h=>h.landmarks.length),frames:times.length,handCounts,
+    inference_ms_mean:steady.reduce((a,b)=>a+b,0)/steady.length,
+    encode_infer_roundtrip_ms:roundtrip.reduce((a,b)=>a+b,0)/roundtrip.length});}
+if(delegate==="HYBRID"){
+  socket=new WebSocket(`ws://${location.host}/ws/infer`);
+  await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject;});
+  socket.onmessage=event=>{const result=JSON.parse(event.data);if(result.error)return finish({ok:false,error:result.error});resultFrame(result);};
+}
+worker.onerror=error=>finish({ok:false,error:error.message});
+worker.onmessage=async event=>{const result=event.data;
+  if(result.kind==="error")return finish({ok:false,error:result.message});
+  if(result.kind==="ready"){info=result;return frame();}
+  if(result.kind==="encoded"){
+    const header=new TextEncoder().encode(JSON.stringify({width:640,height:Math.round(640*image.naturalHeight/image.naturalWidth),fps:60,compute:"CPU XNNPACK + GPU · "+info.renderer}));
+    const packet=new Uint8Array(4+header.length+result.bytes.byteLength);new DataView(packet.buffer).setUint32(0,header.length);
+    packet.set(header,4);packet.set(new Uint8Array(result.bytes),4+header.length);socket.send(packet);
+  }else if(result.kind==="result")await resultFrame(result);
+};worker.postMessage({kind:"init",delegate});
+</script></body></html>

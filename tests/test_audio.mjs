@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+// Import the exact module as ESM without requiring package.json in a Python app.
+const code=await readFile(new URL("../web/audio.js",import.meta.url),"utf8");
+const {AudioEngine}=await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+const engine=new AudioEngine(()=>{});
+let target;
+engine.context={currentTime:0};
+engine.master={gain:{setTargetAtTime(value){target=value;}}};
+engine.setVolume(.7);
+assert.equal(target,.7*1.3,"Le gain doit être le double de la version précédente (0.65)");
+let released;
+engine.voices.set("hand:1:index",{note:60});
+engine.releaseVoice=(source,seconds)=>released={source,seconds};
+engine.sustain=true;
+engine.noteOff("hand:1:index",true);
+assert.equal(released.source,"hand:1:index");
+assert.equal(released.seconds,.065,"Sortir du piano doit couper immédiatement malgré le sustain");
+released=null;engine.voices.set("key:a",{note:60});engine.noteOff("key:a");
+assert.equal(released,null,"Le sustain clavier reste disponible");
+engine.voices.set("guitar",{plucked:true});engine.noteOff("guitar",true);
+assert.equal(released,null,"Une corde pincée doit résonner naturellement");
+console.log("4 contrôles audio réussis : gain ×2, sortie immédiate, sustain clavier, corde naturelle.");

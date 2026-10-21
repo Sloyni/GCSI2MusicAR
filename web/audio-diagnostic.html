@@ -1,0 +1,27 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>MusicAR — diagnostic audio</title><pre id="result">Décodage des instruments…</pre><script type="module">
+import {AudioEngine} from "/static/audio.js";
+const nonce=new URL(location.href).searchParams.get("nonce"),piano=new Map(),guitar=new Map();
+const decoder=new OfflineAudioContext(2,48000,48000);
+async function load(bank,name,note,prefix=""){const response=await fetch(`/assets/audio/${prefix}${name}.mp3`);if(!response.ok)throw new Error("Échantillon absent: "+name);bank.set(note,await decoder.decodeAudioData(await response.arrayBuffer()));}
+async function render(bank,instrument,notes){
+  const context=new OfflineAudioContext(2,48000*2,48000),engine=new AudioEngine(()=>{});
+  engine.context=new Proxy(context,{get(target,key){if(key==="state")return "running";const value=Reflect.get(target,key,target);return typeof value==="function"?value.bind(target):value;}});
+  engine.buffers=piano;engine.guitarBuffers=guitar;engine.input=context.createGain();engine.master=context.createGain();
+  engine.input.connect(engine.master).connect(context.destination);engine.setVolume(.7);
+  notes.forEach((note,i)=>engine.noteOn(note,`test:${i}`,.8,instrument));
+  const result=await context.startRendering(),data=result.getChannelData(0);
+  let sum=0,peak=0;for(const value of data){sum+=value*value;peak=Math.max(peak,Math.abs(value));}
+  return {rms:Math.sqrt(sum/data.length),peak};
+}
+try{
+  const loads=[];
+  for(let octave=3;octave<=6;octave++)for(const [name,pitch] of [["C",0],["Ds",3],["Fs",6],["A",9]])loads.push(load(piano,name+octave,12*(octave+1)+pitch));
+  loads.push(load(piano,"C7",96));
+  for(const [name,note] of [["E2",40],["A2",45],["D3",50],["G3",55],["B3",59],["E4",64],["G4",67],["B4",71]])loads.push(load(guitar,name,note,"guitar/"));
+  await Promise.all(loads);
+  const pianoSignal=await render(piano,"piano",[60,64,67]),guitarSignal=await render(guitar,"guitar",[40,45,50]);
+  const result={ok:pianoSignal.rms>.0001&&guitarSignal.rms>.0001,kind:"audio",piano_samples:piano.size,guitar_samples:guitar.size,pianoSignal,guitarSignal,nonce};
+  document.querySelector("#result").textContent=JSON.stringify(result,null,2);
+  await fetch("/api/diagnostic/gpu",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(result)});
+}catch(error){await fetch("/api/diagnostic/gpu",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ok:false,kind:"audio",error:error.message,nonce})});}
+</script></html>

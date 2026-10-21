@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+logs/
+assets/models/*.task
+assets/audio/*.mp3
+assets/audio/guitar/*.mp3
+.runtime/
+web/vendor/
+assets/manifest.json
+artifacts/
+

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111214">
+  <title>MusicAR — Votre studio augmenté</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-piano" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v8h3V5m4 0v8h3V5M9 13v6m6-6v6"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="m8 5 1-2h6l1 2h4a2 2 0 0 1 2 2v12H2V7a2 2 0 0 1 2-2z"/><circle cx="12" cy="12" r="4"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 13V7a1.5 1.5 0 0 1 3 0v5-8a1.5 1.5 0 0 1 3 0v8-6a1.5 1.5 0 0 1 3 0v7-3a1.5 1.5 0 0 1 3 0v7c0 4-3 6-6 6h-2c-2 0-4-1-5-3l-4-6a1.5 1.5 0 0 1 2-2z"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M5 3v18m7-18v18m7-18v18M2 8h6m1 8h6m1-10h6"/></symbol>
+    <symbol id="i-drum" viewBox="0 0 24 24"><ellipse cx="12" cy="8" rx="9" ry="4"/><path d="M3 8v9c0 5 18 5 18 0V8M6 11l3 9 3-8 3 8 3-9M6 2l6 4m6-4-5 4"/></symbol>
+    <symbol id="i-guitar" viewBox="0 0 24 24"><path d="m14 10 7-7 2 2-7 7c2 5-1 9-5 10-5 1-9-3-8-7 1-4 5-7 11-5zM16 7l2 2M8 17l3-3"/><circle cx="10" cy="14" r="2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5zM15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 2v1"/></symbol>
+    <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6zM8 12l3 3 5-6"/></symbol>
+  </defs></svg>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="MusicAR, accueil"><span class="brand-icon"><svg><use href="#i-piano"/></svg></span>Music<span>AR</span><small>STUDIO</small></a>
+    <nav aria-label="Navigation"><span class="nav-active">Espace de jeu</span><button id="help-top">Comment jouer <svg><use href="#i-help"/></svg></button></nav>
+    <span class="local-badge"><span class="dot"></span> EN LOCAL</span>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="section-label">01 / VOTRE INSTRUMENT</div>
+      <button class="instrument selected" data-instrument="piano" aria-pressed="true"><span class="instrument-art piano-art"><svg><use href="#i-piano"/></svg></span><span><strong>Piano acoustique</strong><small>Salamander Grand</small></span><span class="selection-dot"></span></button>
+      <button class="instrument" data-instrument="drums" aria-pressed="false"><span class="instrument-art drum-art"><svg><use href="#i-drum"/></svg></span><span><strong>Batterie</strong><small>4 pads · sons synthétisés</small></span><span class="selection-dot"></span></button>
+      <button class="instrument" data-instrument="guitar" aria-pressed="false"><span class="instrument-art guitar-art"><svg><use href="#i-guitar"/></svg></span><span><strong>Guitare acoustique</strong><small>6 cordes · suit vos 2 mains</small></span><span class="selection-dot"></span></button>
+      <div class="sidebar-divider"></div>
+      <div class="section-label">02 / VOTRE CAMÉRA</div>
+      <label class="field-label" for="camera-select">Source vidéo</label>
+      <div class="select-wrap"><svg><use href="#i-camera"/></svg><select id="camera-select"><option value="0">Caméra 1 · par défaut</option><option value="1">Caméra 2</option><option value="2">Caméra 3</option><option value="3">Caméra 4</option></select></div>
+      <label class="toggle-row"><span>Effet miroir</span><input type="checkbox" id="mirror" checked><span class="switch"></span></label>
+      <label class="toggle-row"><span>Turbo CPU + GPU</span><input type="checkbox" id="turbo" checked><span class="switch"></span></label>
+      <small class="compute-status" id="compute-status">Accélération graphique automatique</small>
+      <div class="sidebar-divider"></div>
+      <div class="section-label">03 / VOS GESTES</div>
+      <div class="field-label">Doigts actifs <span id="finger-count">2 doigts</span></div>
+      <div class="finger-picker" role="group" aria-label="Doigts qui déclenchent les notes">
+        <button data-finger="thumb" aria-pressed="false" title="Pouce">P</button><button class="selected" data-finger="index" aria-pressed="true" title="Index">I</button><button class="selected" data-finger="middle" aria-pressed="true" title="Majeur">M</button><button data-finger="ring" aria-pressed="false" title="Annulaire">A</button><button data-finger="pinky" aria-pressed="false" title="Auriculaire">Au</button>
+      </div>
+      <label class="field-label range-label" for="sensitivity">Dynamique du geste <span id="sensitivity-value">60 %</span></label>
+      <input id="sensitivity" type="range" min="0" max="100" value="60">
+      <div class="range-ends"><span>Son régulier</span><span>Son expressif</span></div>
+      <div class="tip-card"><svg><use href="#i-hand"/></svg><p id="gesture-tip">Un cercle de doigt sur une touche : la note joue. Sortez du clavier pour la couper.</p></div>
+      <div class="privacy"><svg><use href="#i-shield"/></svg><span>Votre caméra reste sur votre PC.<small>Aucune vidéo envoyée en ligne.</small></span></div>
+    </aside>
+    <main>
+      <div class="studio-heading"><div><div class="eyebrow">LE GESTE DEVIENT MUSIQUE</div><h1>Jouez avec le réel<span>.</span></h1><p>Vos mains, une caméra, des possibilités infinies.</p></div><div class="studio-state" id="studio-state"><span class="dot"></span><span id="state-label">CAMÉRA EN VEILLE</span></div></div>
+      <section class="stage-card" aria-label="Caméra et instrument en réalité augmentée">
+        <div class="stage" id="stage">
+          <video id="gpu-video" autoplay muted playsinline hidden></video>
+          <canvas id="scene" width="960" height="540" aria-label="Vue caméra et clavier virtuel"></canvas>
+          <div class="stage-top"><span class="lens-label"><span class="dot" id="camera-dot"></span><span id="lens-label">VUE AUGMENTÉE</span></span><div class="stage-top-right"><span id="hand-status"><svg><use href="#i-hand"/></svg> 0 / 2 mains</span><button id="fullscreen" class="icon-button" title="Plein écran" aria-label="Plein écran"><svg><use href="#i-expand"/></svg></button></div></div>
+          <div class="camera-empty" id="camera-empty"><div class="camera-orbit"><svg><use href="#i-camera"/></svg><span></span><span></span></div><h2>Votre prochain instrument<br>est juste devant vous.</h2><p id="camera-message">Activez la caméra et entrez dans le jeu.</p><button class="primary" id="start-camera">Activer la caméra <svg><use href="#i-arrow"/></svg></button><button class="text-button" id="try-piano">Ou essayez le piano au clavier</button></div>
+          <div class="calibration-banner" id="calibration-banner" hidden><svg><use href="#i-sliders"/></svg><span>Glissez l’instrument pour le placer. Ajustez sa taille ci-dessous.</span><button id="finish-calibration">Terminer</button></div>
+          <div class="stage-bottom"><span id="stage-instruction">UN CLAVIER VIRTUEL. DE VRAIES NOTES.</span><div><span id="fps">— fps</span><span class="metric-separator"></span><span id="inference">— ms IA</span></div></div>
+        </div>
+        <div class="stage-controls"><div><button id="calibrate" class="secondary"><svg><use href="#i-sliders"/></svg> Calibrer</button><label class="mini-toggle"><input type="checkbox" id="show-hands" checked> Suivi des mains</label><label class="mini-toggle"><input type="checkbox" id="show-labels" checked> Notes</label></div><button id="stop-camera" class="text-button" disabled>Arrêter la caméra</button></div>
+        <div id="calibration-controls" class="calibration-controls" hidden><label>Largeur <input id="keyboard-width" type="range" min="30" max="96" value="86"></label><label>Hauteur <input id="keyboard-height" type="range" min="10" max="45" value="34"></label><label>Position verticale <input id="keyboard-y" type="range" min="20" max="85" value="58"></label><button id="reset-layout" class="text-button">Réinitialiser</button></div>
+      </section>
+      <section class="sound-strip" aria-label="Réglages du son"><div class="sound-name"><span class="sound-dot"></span><div><strong id="sound-name">Piano à queue</strong><span id="audio-status">Cliquez pour activer le son</span></div></div><div class="octave-control"><span>OCTAVE</span><button id="octave-down" aria-label="Octave précédente">−</button><strong id="octave">4</strong><button id="octave-up" aria-label="Octave suivante">+</button></div><label class="sound-slider"><svg><use href="#i-volume"/></svg><input id="volume" aria-label="Volume" type="range" min="0" max="100" value="70"><span id="volume-value">70</span></label><label class="sound-slider reverb-label">Espace<input id="reverb" aria-label="Réverbération" type="range" min="0" max="60" value="18"></label><button id="sustain" class="secondary" aria-pressed="false">Sustain <kbd>ESPACE</kbd></button><button id="panic" class="icon-button panic" title="Couper tous les sons (Échap)" aria-label="Couper tous les sons">■</button></section>
+      <section class="play-section"><div class="play-heading"><div><h2>À vous de jouer</h2><span>Caméra, souris ou clavier — trouvez votre rythme.</span></div><div class="last-note" id="last-note">—<small>DERNIÈRE NOTE</small></div></div><div class="playable" id="playable" aria-label="Instrument jouable à la souris et au clavier"></div><div class="play-footer"><span id="keyboard-hint">Touches blanches : A S D F G H J K L · touches noires : W E T Y U O P</span><button id="demo" class="text-button">♫ Écouter un aperçu</button></div></section>
+      <section class="session-bar"><div class="record-info"><span class="record-indicator" id="record-indicator"></span><span id="record-label">Gardez votre première idée.</span></div><div><button id="record" class="secondary"><svg><use href="#i-record"/></svg> Enregistrer</button><button id="download-recording" class="text-button" disabled>Exporter .webm</button></div></section>
+      <footer><span>MusicAR <span class="footer-sep">/</span> Un nouveau terrain de jeu.</span><button id="about" class="text-button">Crédits & technologie ↗</button></footer>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="help-dialog"><button class="dialog-close" aria-label="Fermer">×</button><div class="eyebrow">PREMIERS ACCORDS</div><h2>Un peu d’air.<br>Beaucoup de musique.</h2><ol><li><strong>Activez la caméra.</strong> Le mode Turbo utilise le GPU quand il est disponible. Gardez les doigts visibles et éclairés.</li><li><strong>Piano : touchez dans l’image.</strong> Une note démarre dès que le cercle d’un doigt entre sur une touche. Sortez du clavier pour l’arrêter. Aucun mouvement de frappe n’est nécessaire.</li><li><strong>Tambours : entrez sur un pad.</strong> Le son part immédiatement. Sortez puis revenez pour le rejouer.</li><li><strong>Guitare : montrez deux mains.</strong> La main côté manche choisit les frettes. Les doigts de l’autre main touchent ou traversent les six cordes. La guitare suit vos paumes.</li></ol><p>Calibrez le piano et les pads en les déplaçant dans l’image. La guitare se place automatiquement entre les mains. Souris et clavier restent disponibles. Échap coupe les sons.</p><div class="dialog-note">L’interaction utilise la position des cercles dans l’image. Le piano s’arrête à la sortie du doigt, même si le sustain clavier est activé.</div><button class="primary dialog-done">C’est parti <svg><use href="#i-arrow"/></svg></button></dialog>
+  <dialog id="about-dialog"><button class="dialog-close" aria-label="Fermer">×</button><div class="eyebrow">CONSTRUIT POUR EXPLORER</div><h2>Le réel rencontre<br>le numérique.</h2><p>Python capture la caméra et MediaPipe suit jusqu’à deux mains, avec 21 repères par main. Le piano est superposé à l’image ; les contacts des doigts sont analysés localement.</p><p>Le son est joué par Web Audio : enregistrements de piano et de guitare, polyphonie, dynamique, sustain et réverbération. La batterie utilise une synthèse de percussions.</p><div class="dialog-note">Piano : Salamander Grand Piano, Alexander Holm. Échantillons distribués par Tone.js, licence CC BY 3.0. Une couche de vélocité, transposition des notes voisines et filtre selon la force du geste.</div><p><a href="https://archive.org/details/SalamanderGrandPianoV3" target="_blank" rel="noopener">Piano original ↗</a> · <a href="https://github.com/nbrosowsky/tonejs-instruments" target="_blank" rel="noopener">Guitare : N. P. Brosowsky, CC BY 3.0 ↗</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">Licence CC BY 3.0 ↗</a></p><button class="primary dialog-done">Retour au studio</button></dialog>
+</body>
+</html>
