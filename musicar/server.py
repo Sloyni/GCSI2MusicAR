@@ -57,7 +57,7 @@ def index():
 @app.get("/api/health")
 def health():
     state, _ = engine.snapshot()
-    return {"app": "MusicAR", "version": "0.2.0", "camera": state["status"],
+    return {"app": "MusicAR", "version": "0.3.1", "camera": state["status"],
             "interaction": "contact", "guitar_ready": all((ROOT / f"assets/audio/guitar/{name}.mp3").is_file()
                 for name in ("E2","A2","D3","G3","B3","E4","G4","B4")),
             "gpu_ready":(ROOT / "web/vendor/wasm/vision_wasm_internal.wasm").is_file(),

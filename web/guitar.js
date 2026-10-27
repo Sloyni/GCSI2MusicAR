@@ -37,12 +37,19 @@ export function drawGuitar(ctx,guitar,w,h,time,active,flashes,labels){
   ctx.restore();
   for(const string of guitar.strings){
     const x1=string.start[0]*w,y1=string.start[1]*h,x2=string.end[0]*w,y2=string.end[1]*h;
-    const flash=time-(flashes.get(string.note)||-1000)<280,pressed=active.has(string.note),lit=flash||pressed;
+    const elapsed=time-(flashes.get(string.note)??-1000);
+    const flash=elapsed>=0&&elapsed<280,pressed=active.has(string.note)||guitar.contacts?.includes(string.index),lit=flash||pressed;
     const vibration=flash?Math.sin(time*.07+string.index)*3:0;
     ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo((x1+x2)/2-Math.sin(angle)*vibration,(y1+y2)/2+Math.cos(angle)*vibration,x2,y2);
     ctx.strokeStyle=lit?"#fff1c4":"#d7c6a3e0";ctx.lineWidth=(6-string.index)*.22+.6;
     if(lit){ctx.shadowColor="#ffce87";ctx.shadowBlur=9;}ctx.stroke();ctx.shadowBlur=0;
     if(labels){ctx.font="10px Segoe UI";ctx.fillStyle="#ffdda9";ctx.textAlign="left";ctx.fillText(string.label+(string.fret?` · f${string.fret}`:""),x2+8,y2+3);}
   }
-  for(const [point,label] of [[a,"MANCHE"],[b,"CORDES"]]){ctx.strokeStyle="#f2c99990";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(point[0],point[1],12,0,Math.PI*2);ctx.stroke();ctx.font="8px Segoe UI";ctx.fillStyle="#f2c999";ctx.textAlign="center";ctx.fillText(label,point[0],point[1]-r*.9);}
+  for(const [point,label] of [[a,"MANCHE"],[b,"CORDES"]]){ctx.font="8px Segoe UI";ctx.fillStyle="#f2c999";ctx.textAlign="center";ctx.fillText(label,point[0],point[1]-r*.9);}
+  if(guitar.chord){
+    ctx.textAlign="center";ctx.font="600 26px Segoe UI";ctx.fillStyle="#ffdda9";
+    ctx.fillText(guitar.mode==="melody"?"MÉLODIE":guitar.muted?"PAUSE":guitar.chord,w*.45,h*.40);
+    ctx.font="12px Segoe UI";ctx.fillStyle="#e6d4bb";
+    ctx.fillText(guitar.mode==="melody"?guitar.melody.map((n,i)=>["Index","Majeur","Annulaire","Auriculaire"][i]+" : "+["Do","Do♯","Ré","Ré♯","Mi","Fa","Fa♯","Sol","Sol♯","La","La♯","Si"][n%12]+(Math.floor(n/12)-1)).join("   ·   "):"1 Do · 2 Sol · 3 Lam · 4 Fa · 5 Rém",w*.5,h*.46);
+  }
 }

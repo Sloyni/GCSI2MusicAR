@@ -86,3 +86,19 @@ def test_gpu_bridge_invalid_landmarks_are_rejected():
             assert "error" in ws.receive_json()
         assert engine.external_owner is None
 
+
+def test_expression_settings_and_live_pitch_cross_the_browser_bridge():
+    from tests.test_performance import hand
+    with TestClient(app) as client:
+        response=client.put("/api/config",json=Settings(pitch_gesture=True,music_style="jazz",tone=.4).model_dump())
+        assert response.status_code==200 and response.json()["config"]["music_style"]=="jazz"
+        with client.websocket_connect("/ws/hands") as ws:
+            h=hand(y=.2);h.pop("id")
+            h["confidence"]=.99
+            frame=browser_frame();frame["hands"]=[h]
+            ws.send_json(frame);result=ws.receive_json()
+            assert result["performance"]["zone"] and abs(result["performance"]["pitch"])<=2
+            frame["hands"]=[];ws.send_json(frame)
+            assert ws.receive_json()["performance"]["pitch"]==0
+        engine.configure(Settings())
+

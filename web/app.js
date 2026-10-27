@@ -1,4 +1,4 @@
-import {AudioEngine} from "/static/audio.js";
+import {AudioEngine,SOUND_STYLES} from "/static/audio.js";
 import {GpuCamera} from "/static/gpu-camera.js";
 import {OPEN_STRINGS,previewGuitar,drawGuitar} from "/static/guitar.js";
 
@@ -13,6 +13,8 @@ const whiteBindings = ["a","s","d","f","g","h","j","k","l"];
 const blackBindings = ["w","e","t","y","u","o","p"];
 let bindingMap = new Map(), configTimer, toastTimer, demoTimer, demoRunning=false, saveChain=Promise.resolve();
 let playEpoch=0,noteSerial=0;
+let configVersion=0,pendingWrites=0;
+const CHORDS={C:[48,52,55,60,64,67],G:[43,47,50,55,59,67],Am:[45,52,57,60,64,69],F:[41,48,53,57,60,65],Dm:[50,53,57,62,65,69],Em:[40,47,52,55,59,64]};
 const latestPlay=new Map();
 const gpu=new GpuCamera($("#gpu-video"),meta=>{updateCamera(meta);handleNotes(meta.events);},
   text=>{$("#compute-status").textContent=text;},error=>fallbackCpu(error));
@@ -38,6 +40,7 @@ async function api(path, method="GET", data) {
 
 function applySettings(result) {
   state.config = result.config;
+  if(state.config.instrument!=="guitar")state.guitar=null;
   state.layout = result.layout;
   $("#mirror").checked = state.config.mirror;
   $("#octave").textContent = state.config.octave;
@@ -54,7 +57,6 @@ function applySettings(result) {
     const selected = state.config.instrument === button.dataset.instrument;
     button.classList.toggle("selected", selected); button.setAttribute("aria-pressed", selected);
   });
-  $("#sound-name").textContent = {piano:"Piano à queue",drums:"Batterie · synthèse",guitar:"Guitare acoustique"}[state.config.instrument];
   if(state.config.instrument==="guitar"&&audio.guitarBuffers.size===8)$("#audio-status").textContent="Guitare enregistrée · prête à jouer";
   else if(state.config.instrument==="drums"&&audio.context)$("#audio-status").textContent="Percussions · prêtes à jouer";
   else if(state.config.instrument==="piano"&&audio.buffers.size===17)$("#audio-status").textContent="Piano enregistré · prêt à jouer";
@@ -62,15 +64,37 @@ function applySettings(result) {
   gpu.mirror=state.config.mirror;
   $("#gpu-video").style.transform=state.config.mirror?"scaleX(-1)":"none";
   $("#calibrate").disabled=state.config.instrument==="guitar";
-  $("#gesture-tip").textContent={piano:"Un cercle de doigt sur une touche : la note joue. Sortez du clavier pour la couper.",drums:"Touchez un pad avec le cercle d’un doigt. Sortez puis revenez pour le rejouer.",guitar:"Montrez deux mains. La guitare suit vos paumes : une main sur le manche, l’autre sur les cordes."}[state.config.instrument];
   $("#try-piano").textContent="Ou jouez à la souris et au clavier";
-  $("#keyboard-hint").textContent = state.config.instrument === "piano"
-    ? "Touches blanches : A S D F G H J K L · touches noires : W E T Y U O P"
-    : state.config.instrument==="guitar" ? "Cordes Mi La Ré Sol Si Mi · touches A S D F G H" : "Touches A S D F · kick, snare, hi-hat et tom";
   $("#keyboard-width").value = Math.round(state.config.width * 100);
   $("#keyboard-height").value = Math.round(state.config.height * 100);
   $("#keyboard-y").value = Math.round(state.config.y * 100);
+  syncSoundSettings();
   buildPlayable();
+}
+
+function syncSoundSettings(){
+  const s=state.config;if(!s)return;
+  audio.configure(s);
+  $("#sound-name").textContent={piano:"Piano",drums:"Batterie",guitar:"Guitare"}[s.instrument]+" · "+SOUND_STYLES[s.music_style].label;
+  $$('[data-style]').forEach(button=>{const active=button.dataset.style===s.music_style;button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active);});
+  $("#tone").value=Math.round(s.tone*100);$("#tone-value").textContent=`${Math.round(s.tone*100)} %`;
+  $("#transpose").value=s.transpose;$("#transpose-value").textContent=`${s.transpose>0?"+":""}${s.transpose}`;
+  for(const [id,key] of [["guitar-mode","guitar_mode"],["scale","scale"],["root","root"],["pitch-range","pitch_range"],["control-hand","control_hand"],["expression-zone","expression_zone"]])$("#"+id).value=s[key];
+  $("#pitch-gesture").checked=s.pitch_gesture;$("#style-swipe").checked=s.style_swipe;
+  $("#pitch-gesture").disabled=s.instrument==="drums";$("#transpose").disabled=s.instrument==="drums";
+  $("#guitar-mode-field").hidden=s.instrument!=="guitar";
+  $("#strike-mode-field").hidden=s.instrument==="guitar";
+  $("#strike-mode").value=s.instrument==="drums"?s.drum_mode:s.piano_mode;
+  $("#scale-field").hidden=$("#root-field").hidden=s.instrument==="drums"||(s.instrument==="guitar"&&s.guitar_mode!=="melody");
+  const guides={
+    piano:s.piano_mode==="strike"?"Descendez les doigts sur les touches, puis relevez-les pour rejouer. Les touches estompées sont hors de la gamme choisie.":"Posez les cercles sur les touches pour jouer, sortez pour relâcher. Les touches estompées sont hors de la gamme choisie.",
+    drums:s.drum_mode==="strike"?"Frappez vers le bas avec l’index. Relevez-le légèrement pour rejouer, même dans le pad. Plus vite = plus fort. Le hi-hat fermé étouffe le hi-hat ouvert.":"Entrez sur un pad pour jouer. Sortez puis revenez pour répéter. Six sons sont disponibles.",
+    guitar:s.guitar_mode==="chords"?"Main gauche : 1 doigt = Do, 2 = Sol, 3 = La mineur, 4 = Fa, 5 = Ré mineur ; poing fermé = pause. La guitare suit votre poignet droit. Bougez un doigt actif sur les cordes côté caisse : une corde touchée = une note. Traversez plusieurs cordes pour gratter, sortez de la corde pour la rejouer.":s.guitar_mode==="melody"?"La guitare suit le poignet droit. Pincez le pouce avec l’index, le majeur, l’annulaire ou l’auriculaire pour jouer quatre notes. Relâchez pour rejouer. Main gauche : 1 à 4 doigts choisissent quatre groupes successifs de la gamme, soit 16 notes accessibles.":"Montrez deux mains écartées. Les doigts côté manche choisissent les frettes ; l’autre main touche ou traverse les cordes."
+  };
+  $("#playing-guide").textContent=$("#gesture-tip").textContent=guides[s.instrument];
+  $("#performance-guide").textContent=`Main de contrôle : ${s.control_hand==="left"?"à gauche":"à droite"} de l’image. ${s.expression_zone==="top"?"Levez-la dans la bande du haut. ":"Gestes utilisables à hauteur normale. "}Pouce–index : rapprochez pour baisser le pitch, écartez pour le monter ; « Centrer le pitch » mémorise votre écart neutre. Main ouverte : balayez horizontalement à droite/gauche pour changer de style. Le pitch mesuré et le style sélectionné sont affichés en direct.`;
+  $("#keyboard-hint").textContent=s.instrument==="guitar"?(s.guitar_mode==="chords"?"A S D F G H : Do · Sol · Lam · Fa · Rém · Mim":s.guitar_mode==="melody"?"A S D F : quatre notes · même gamme que les pincements":"A S D F G H : les six cordes"):
+    s.instrument==="drums"?"A S D F G H : kick · snare · hi-hat · tom · crash · hi-hat ouvert":"Touches blanches : A S D F G H J K L · touches noires : W E T Y U O P";
 }
 
 function saveConfig(patch, debounce=false) {
@@ -80,13 +104,16 @@ function saveConfig(patch, debounce=false) {
   desired.x = Math.max(0, Math.min(desired.x, 1 - desired.width));
   desired.y = Math.max(.15, Math.min(desired.y, 1 - desired.height));
   state.config = desired;
+  const version=++configVersion;
+  syncSoundSettings();
   const send = () => {
+    configTimer=null;
     const snapshot = {...state.config};
+    pendingWrites++;
     saveChain = saveChain.catch(() => {}).then(async () => {
       const result = await api("/api/config", "PUT", snapshot);
-      applySettings(result);
-      localStorage.setItem("musicar-config", JSON.stringify(result.config));
-    }).catch(error => toast(error.message));
+      if(version===configVersion){applySettings(result);localStorage.setItem("musicar-config", JSON.stringify(result.config));}
+    }).catch(error => toast(error.message)).finally(()=>pendingWrites--);
   };
   clearTimeout(configTimer);
   if (debounce) configTimer = setTimeout(send, 100); else send();
@@ -103,8 +130,13 @@ function buildPlayable() {
       button.setAttribute("aria-label", pad.label);
       bindingMap.set(whiteBindings[i], pad.note); wirePointer(button, pad.note); area.append(button);
     });
+  } else if(state.config.instrument==="guitar"&&state.config.guitar_mode==="chords") {
+    Object.keys(CHORDS).forEach((chord,i)=>{const button=document.createElement("button");button.className="guitar-string-button chord-button";
+      button.dataset.chord=chord;button.innerHTML=`<span>${chord}</span><kbd>${whiteBindings[i].toUpperCase()}</kbd>`;button.setAttribute("aria-label",`Jouer l’accord ${chord}`);
+      bindingMap.set(whiteBindings[i],chord);button.addEventListener("click",()=>strumChord(chord));area.append(button);});
   } else if(state.config.instrument==="guitar") {
-    OPEN_STRINGS.forEach((note,i)=>{const button=document.createElement("button");button.className="guitar-string-button";button.dataset.note=note;
+    const notes=state.config.guitar_mode==="melody"?melodyNotes():OPEN_STRINGS;
+    notes.forEach((note,i)=>{const button=document.createElement("button");button.className="guitar-string-button";button.dataset.note=note;
       const label=names[note%12]+(Math.floor(note/12)-1);button.innerHTML=`<span>${label}</span><kbd>${whiteBindings[i].toUpperCase()}</kbd>`;
       button.setAttribute("aria-label",`Corde ${i+1} · ${label}`);bindingMap.set(whiteBindings[i],note);wirePointer(button,note);area.append(button);});
   } else {
@@ -113,6 +145,7 @@ function buildPlayable() {
       const button = document.createElement("button");
       button.className = `piano-key${key.black ? " black" : ""}`;
       button.dataset.note = key.note; button.setAttribute("aria-label", key.label);
+      button.disabled=key.enabled===false;
       const binding = key.black ? blackBindings[black++] : whiteBindings[white++];
       if (key.black) {
         button.style.left = `${(key.x - state.config.x) / state.config.width * 100}%`;
@@ -121,11 +154,23 @@ function buildPlayable() {
       const label = document.createElement("span"); label.className="note";
       label.textContent = key.black ? "" : key.label.replace(/\d/g, "");
       const hint = document.createElement("span"); hint.className="binding"; hint.textContent = binding?.toUpperCase() || "·";
-      button.append(label,hint); if (binding) bindingMap.set(binding,key.note);
+      button.append(label,hint); if (binding&&key.enabled!==false) bindingMap.set(binding,key.note);
       wirePointer(button,key.note); area.append(button);
     }
   }
   updatePressed();
+}
+
+function melodyNotes(){
+  if(state.guitar?.melody)return state.guitar.melody;
+  const intervals={chromatic:[0,1,2,3],major:[0,2,4,5],minor:[0,2,3,5],pentatonic:[0,2,4,7]}[state.config.scale];
+  return intervals.map(n=>48+state.config.root+n);
+}
+
+function strumChord(chord){
+  const serial=++noteSerial;
+  CHORDS[chord].forEach((note,i)=>{const source=`chord:${serial}:${i}`;play(note,source,.72,{string:i,delay:i*.012});setTimeout(()=>release(source),500);});
+  $("#play-caption").textContent=`Accord ${chord} · six cordes`;
 }
 
 function wirePointer(button, note) {
@@ -138,19 +183,19 @@ function wirePointer(button, note) {
   button.addEventListener("click", event => { if (event.detail === 0) { const source=`accessible:${note}`; play(note,source); setTimeout(()=>release(source),400); } });
 }
 
-async function play(note, source, velocity=.7) {
+async function play(note, source, velocity=.7, options={}) {
   const instrument=state.config.instrument;
   const epoch=playEpoch,serial=++noteSerial;latestPlay.set(source,serial);
   state.pressed.set(source,note);
-  state.flashes.set(note,performance.now());
+  state.flashes.set(note,performance.now()+(options.delay||0)*1000);
   const display = typeof note === "number" ? names[note%12]+(Math.floor(note/12)-1) : note.toUpperCase();
   $("#last-note").replaceChildren(document.createTextNode(display));
   const small=document.createElement("small");small.textContent="DERNIÈRE NOTE";$("#last-note").append(small);
   updatePressed();
   try {
-    await audio.ensure(instrument);
+    if(!audio.ready(instrument))await audio.ensure(instrument);
     if(epoch!==playEpoch || latestPlay.get(source)!==serial) return;
-    audio.noteOn(note,source,velocity,instrument);
+    audio.noteOn(note,source,velocity,instrument,options);
     if (state.pressed.get(source) !== note) setTimeout(() => {if(latestPlay.get(source)===serial)audio.noteOff(source);}, 180);
   } catch(error) { release(source); toast(error.message); }
 }
@@ -167,7 +212,7 @@ function updatePressed() {
 function panic(notify=false) {
   playEpoch++;latestPlay.clear();
   clearTimeout(demoTimer); demoRunning=false; $("#demo").textContent="♫ Écouter un aperçu";
-  state.pressed.clear(); audio.panic(); updatePressed();
+  state.pressed.clear(); audio.panic();audio.setPitch(0); updatePressed();
   api("/api/panic","POST").catch(()=>{});
   if (notify) toast("Tous les sons ont été coupés.");
 }
@@ -183,7 +228,13 @@ function toggleCalibration(value=!state.calibrating) {
 }
 
 function updateCamera(meta) {
+  const oldMelody=state.guitar?.melody?.join(",");
+  state.performance=meta.performance||{pitch:0};
+  audio.setPitch(state.config?.pitch_gesture?state.performance.pitch||0:0);
+  $("#expression-status").textContent=`Pitch ${(audio.pitch>=0?"+":"")+audio.pitch.toFixed(1)} demi-ton${state.performance.zone?" · contrôle actif":""}`;
+  $("#calibrate-pitch").disabled=!state.performance.zone||state.performance.pinch==null||state.config?.instrument==="drums";
   state.camera=meta.status; state.hands=meta.hands;state.guitar=meta.guitar||null;
+  if(state.guitar)state.guitarNeckId=state.guitar.neck_hand;
   $("#studio-state").className=`studio-state ${meta.status}`;
   const labels={idle:"CAMÉRA EN VEILLE",starting:"CONNEXION…",running:"EN DIRECT",stopping:"FERMETURE…",error:"CAMÉRA INDISPONIBLE"};
   $("#state-label").textContent=labels[meta.status] || meta.status;
@@ -198,14 +249,22 @@ function updateCamera(meta) {
   $("#hand-status").innerHTML=`<svg><use href="#i-hand"/></svg> ${meta.hands.length} / 2 mains`;
   $("#fps").textContent=meta.status==="running" ? `${Math.round(meta.fps)} fps` : "— fps";
   $("#inference").textContent=meta.status==="running" ? `${Math.round(meta.inference_ms)} ms IA` : "— ms IA";
-  $("#stage-instruction").textContent=state.config?.instrument==="guitar" ? (state.guitar?"TOUCHEZ LES CORDES. LA GUITARE SUIT VOS MAINS.":"MONTREZ DEUX MAINS ÉCARTÉES POUR CRÉER LA GUITARE.") : "ENTREZ SUR UNE NOTE. SORTEZ POUR LA COUPER.";
+  $("#stage-instruction").textContent=state.config?.instrument==="guitar" ? (state.guitar?state.config.guitar_mode==="chords"?"GAUCHE : ACCORD · DROITE : TOUCHEZ LES CORDES AVEC UN DOIGT":state.config.guitar_mode==="melody"?"POUCE + UN DOIGT = UNE NOTE":"TOUCHEZ OU TRAVERSEZ LES CORDES.":"MONTREZ DEUX MAINS POUR JOUER.") : state.config?.instrument==="drums"?"FRAPPEZ, RELEVEZ, REJOUEZ.":"JOUEZ LES TOUCHES AVEC VOS DOIGTS.";
   if(meta.compute)$("#compute-status").textContent=meta.compute;
+  if(state.config?.instrument==="guitar"){
+    if(state.config.guitar_mode==="melody"&&oldMelody!==state.guitar?.melody?.join(","))buildPlayable();
+    if(state.guitar?.chord&&state.config.guitar_mode==="chords")$("#play-caption").textContent=state.guitar.muted?"Poing fermé · grattage en pause":`Accord ${state.guitar.chord} · prêt à gratter`;
+  }
   if(meta.status!=="running" && state.bitmap){state.bitmap.close();state.bitmap=null;}
 }
 
 function handleNotes(events=[]){
-  for(const note of events){if(note.kind==="off")release(`hand:${note.source}`);
-    else if(!state.calibrating&&!document.hidden)play(note.note,`hand:${note.source}`,note.velocity);}
+  const when=audio.context?.currentTime;
+  for(const note of events){
+    if(note.kind==="style"){state.config.music_style=note.style;syncSoundSettings();localStorage.setItem("musicar-config",JSON.stringify(state.config));toast(`Style : ${SOUND_STYLES[note.style].label}`);}
+    else if(note.kind==="off")release(`hand:${note.source}`);
+    else if(note.kind==="on"&&!state.calibrating&&!document.hidden)play(note.note,`hand:${note.source}`,note.velocity,{...note,when});
+  }
 }
 
 function connect() {
@@ -216,7 +275,7 @@ function connect() {
     if(state.ws!==ws) return;
     const data=new Uint8Array(event.data), length=new DataView(event.data).getUint32(0);
     const meta=JSON.parse(new TextDecoder().decode(data.subarray(4,4+length)));
-    if(meta.settings && state.configured) applySettings(meta.settings);
+    if(meta.settings && state.configured&&!pendingWrites&&!configTimer) applySettings(meta.settings);
     if(state.gpuActive)return;
     updateCamera(meta);
     handleNotes(meta.events);
@@ -273,6 +332,11 @@ function render(time) {
   const s=state.config;
   const active=new Set(state.pressed.values());
   const scale=w/960;
+  if(s.expression_zone==="top"&&(s.style_swipe||s.pitch_gesture)){
+    ctx.fillStyle=state.performance?.zone?"#99d9d11a":"#99d9d108";ctx.fillRect(0,0,w,h*.32);
+    ctx.setLineDash([5,7]);ctx.strokeStyle="#99d9d14a";ctx.beginPath();ctx.moveTo(0,h*.32);ctx.lineTo(w,h*.32);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle="#b7d2c4";ctx.font=`${10*scale}px Segoe UI`;ctx.textAlign="center";ctx.fillText("ZONE D’EXPRESSION · PITCH / BALAYAGE DE STYLE",w/2,h*.29);
+  }
   if(s.instrument==="piano") {
     const x=s.x*w,y=s.y*h,kw=s.width*w,kh=s.height*h;
     ctx.shadowColor="#0008";ctx.shadowBlur=24*scale;ctx.shadowOffsetY=9*scale;
@@ -280,6 +344,7 @@ function render(time) {
     for(const key of state.layout.keys) {
       const kx=key.x*w,ky=key.y*h,kww=key.width*w,khh=key.height*h;
       const pressed=active.has(key.note), flash=time-(state.flashes.get(key.note)||-1000)<180;
+      ctx.globalAlpha=key.enabled===false?.3:1;
       const grad=ctx.createLinearGradient(kx,ky,kx,ky+khh);
       if(key.black){grad.addColorStop(0,pressed||flash?"#916840":"#252c31ef");grad.addColorStop(1,pressed||flash?"#d29a64":"#10171bfd");}
       else{grad.addColorStop(0,pressed||flash?"#f1bc86ed":"#e2e5dfbc");grad.addColorStop(1,pressed||flash?"#ffdbb4f5":"#f4f4e8e8");}
@@ -289,6 +354,7 @@ function render(time) {
       if($("#show-labels").checked){ctx.fillStyle=key.black?"#9ba5a8":"#56605bf0";ctx.font=`${(key.black?8:10)*scale}px Segoe UI`;ctx.textAlign="center";ctx.fillText(key.label,kx+kww/2,ky+khh-13*scale);}
       if(!key.black){ctx.fillStyle="#ffffff44";ctx.fillRect(kx+3,ky+khh-4,kww-6,2);}
     }
+    ctx.globalAlpha=1;
     ctx.fillStyle="#d8b18b";ctx.font=`${8*scale}px Segoe UI`;ctx.textAlign="left";ctx.fillText("M U S I C A R",x+6*scale,y-5*scale);
   } else if(s.instrument==="drums") {
     for(const pad of state.layout.pads){
@@ -309,10 +375,18 @@ function render(time) {
 const connections=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
 const fingerTips={thumb:4,index:8,middle:12,ring:16,pinky:20};
 function drawHands(w,h,scale) {
+  const neckId=state.config.instrument==="guitar"?(state.guitar?.neck_hand??state.guitarNeckId??(state.hands.length===2?[...state.hands].sort((a,b)=>a.landmarks[0][0]-b.landmarks[0][0])[0].id:state.hands.find(hand=>hand.landmarks[0][0]<.5)?.id)):null;
   for(const hand of state.hands){
     const color=hand.id%2?"#ecc598":"#99d9d1",points=hand.landmarks;
     ctx.strokeStyle=color+"88";ctx.lineWidth=1.5*scale;
     for(const [a,b] of connections){ctx.beginPath();ctx.moveTo(points[a][0]*w,points[a][1]*h);ctx.lineTo(points[b][0]*w,points[b][1]*h);ctx.stroke();}
+    if(state.config.pitch_gesture&&state.performance?.hand===hand.id){
+      ctx.beginPath();ctx.moveTo(points[4][0]*w,points[4][1]*h);ctx.lineTo(points[8][0]*w,points[8][1]*h);
+      ctx.strokeStyle="#a6d8bd";ctx.lineWidth=2*scale;ctx.stroke();ctx.font=`${11*scale}px Segoe UI`;ctx.fillStyle="#c2f1d6";ctx.textAlign="left";
+      ctx.fillText(`Pitch ${audio.pitch>=0?"+":""}${audio.pitch.toFixed(1)}`,points[4][0]*w+12*scale,points[4][1]*h-14*scale);
+    }
+    // The harmony hand selects a pose; only the picking hand needs contact circles.
+    if(hand.id===neckId)continue;
     for(let i=0;i<points.length;i++){
       const finger=Object.keys(fingerTips).find(name=>fingerTips[name]===i),active=finger&&state.config.fingers.includes(finger);
       const x=points[i][0]*w,y=points[i][1]*h;
@@ -367,6 +441,19 @@ $$("[data-finger]").forEach(button=>button.addEventListener("click",()=>{
   if(!fingers.length){toast("Gardez au moins un doigt actif.");return;}panic();saveConfig({fingers});
 }));
 $("#sensitivity").addEventListener("input",event=>{$("#sensitivity-value").textContent=event.target.value+" %";saveConfig({sensitivity:Number(event.target.value)/100},true);});
+$$('[data-style]').forEach(button=>button.addEventListener("click",()=>saveConfig({music_style:button.dataset.style})));
+$("#tone").addEventListener("input",event=>saveConfig({tone:Number(event.target.value)/100},true));
+$("#transpose").addEventListener("input",event=>saveConfig({transpose:Number(event.target.value)},true));
+for(const [id,key,numeric] of [["guitar-mode","guitar_mode",false],["scale","scale",false],["root","root",true],["pitch-range","pitch_range",true],["control-hand","control_hand",false],["expression-zone","expression_zone",false]])
+  $("#"+id).addEventListener("change",event=>{panic();state.guitar=null;saveConfig({[key]:numeric?Number(event.target.value):event.target.value});});
+$("#strike-mode").addEventListener("change",event=>{panic();saveConfig({[state.config.instrument==="drums"?"drum_mode":"piano_mode"]:event.target.value});});
+$("#pitch-gesture").addEventListener("change",event=>{audio.setPitch(0);saveConfig({pitch_gesture:event.target.checked});});
+$("#style-swipe").addEventListener("change",event=>saveConfig({style_swipe:event.target.checked}));
+$("#calibrate-pitch").addEventListener("click",()=>{
+  const ratio=state.performance?.pinch;
+  if(!state.performance?.zone||ratio==null)return;
+  saveConfig({pitch_neutral:Math.max(.15,Math.min(2.5,ratio))});toast("Écart neutre mémorisé. Resserrez pour descendre, écartez pour monter.");
+});
 $("#calibrate").addEventListener("click",()=>toggleCalibration());$("#finish-calibration").addEventListener("click",()=>toggleCalibration(false));
 $("#keyboard-width").addEventListener("input",event=>saveConfig({width:Number(event.target.value)/100},true));
 $("#keyboard-height").addEventListener("input",event=>saveConfig({height:Number(event.target.value)/100},true));
@@ -386,7 +473,7 @@ const ignoreKeys=()=>["INPUT","SELECT","TEXTAREA"].includes(document.activeEleme
 document.addEventListener("keydown",event=>{
   if(event.key==="Escape"){panic();return;}if(event.repeat||ignoreKeys())return;
   if(event.code==="Space"){event.preventDefault();sustain(true);return;}
-  const note=bindingMap.get(event.key.toLowerCase());if(note!==undefined){event.preventDefault();play(note,`key:${event.key.toLowerCase()}`);}
+  const note=bindingMap.get(event.key.toLowerCase());if(note!==undefined){event.preventDefault();if(state.config.instrument==="guitar"&&CHORDS[note])strumChord(note);else play(note,`key:${event.key.toLowerCase()}`);}
 });
 document.addEventListener("keyup",event=>{if(event.code==="Space"){sustain(false);return;}release(`key:${event.key.toLowerCase()}`);});
 window.addEventListener("blur",()=>{sustain(false);panic();});
@@ -400,6 +487,10 @@ $("#demo").addEventListener("click",async()=>{
   let i=0;
   const tick=()=>{
     if(!demoRunning)return;
+    if(state.config.instrument==="guitar"&&state.config.guitar_mode==="chords"){
+      strumChord(["C","G","Am","F"][Math.floor(i/2)%4]);i++;
+      if(i<8)demoTimer=setTimeout(tick,600);else{demoRunning=false;$("#demo").textContent="♫ Écouter un aperçu";}return;
+    }
     const note=state.config.instrument==="piano"?root+piano[i]:state.config.instrument==="guitar"?OPEN_STRINGS[i%6]:["kick","hat","snare","hat","kick","hat","tom","snare"][i%8];
     const source=`demo:${i}`;play(note,source,.55+(i%4)*.07);setTimeout(()=>release(source),300);
     i++;if(i<piano.length)demoTimer=setTimeout(tick,330);else{demoRunning=false;$("#demo").textContent="♫ Écouter un aperçu";}

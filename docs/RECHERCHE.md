@@ -1,4 +1,26 @@
-# Choix techniques — recherche du 14 octobre 2026
+# Choix techniques — recherche actualisée le 27 octobre 2026
+
+## Correction des gestes d’expression à hauteur normale
+
+Le pitch par écart pouce–index et le balayage de la main de contrôle sont désormais utilisables partout dans l’image par défaut. La bande haute est une option explicite ; la restriction initiale expliquait l’absence de réaction lors des gestes à hauteur du clavier ou de la guitare. Le balayage est mesuré au centre de la paume et réservé à la main de contrôle.
+
+## Correction après essai utilisateur : toucher des cordes et ancrage au poignet
+
+Le retour du joueur remplace le grattage automatique au poignet décrit ci-dessous : dans le mode accords, la guitare suit désormais le poignet droit et chaque corde n’est jouée que par le contact ou le passage d’un doigt actif. Le détecteur conserve les coordonnées relatives au poignet, une hystérésis de contact et un anti-doublon par corde. Les traversées sont espacées dans Web Audio selon leur position le long du trajet. Les paragraphes sur la surface fixe et le déclenchement global décrivent la première version et ne s’appliquent plus au mode accords actuel.
+
+## Expressivité et jouabilité — 27 octobre
+
+Sources primaires consultées pour la nouvelle interaction :
+
+- [Dastan, Gesture Guitar Studio](https://kelidari.com/dastan-gesture-guitar/) sépare accords et mélodie et propose gammes, transposition et jeu de guitare par accords. MusicAR reprend le principe de séparation des tâches, avec grattage volontaire du poignet ; aucun accompagnement automatique n’est ajouté.
+- [Gesture Synth : fonctionnement des gestes](https://synthgesture.com/blog/how-gesture-synth-turns-hand-landmarks-into-music) documente la stabilisation des poses, les frappes avec remontée pour réarmer et la détection du trajet entre deux images. MusicAR utilise une confirmation d’accord de 130 ms, une tolérance de perte de suivi de 180 ms sur la guitare assistée, et un détecteur de frappes avec course minimale et vitesse configurable.
+- [Theremotion](https://plule.github.io/theremotion/) utilise des dimensions gestuelles séparées pour hauteur, volume et filtre, et permet un guidage par gamme. MusicAR propose des gammes pour le piano et la mélodie guitare, ainsi qu’un pitch continu distinct des notes.
+- [Leap Motion : gestes de déclenchement](https://www.leapmotiontechnology.com/blog-sub/click-bang-go-gestures-for-triggering-events) explique l’intérêt du pincement pour son retour tactile et les conflits possibles entre commandes gestuelles. D’où quatre pincements de mélodie et une bande supérieure réservée aux commandes de pitch et de style.
+- [Manuel Aerodrums](https://aerodrums.com/manual/) décrit l’ajustement des surfaces et de la réponse des frappes. MusicAR conserve sa calibration des pads et ajoute une dynamique liée à la vitesse, sans prétendre reproduire la précision de son matériel dédié.
+
+Implémentation locale : pitch en demi-tons via `AudioBufferSourceNode.detune`, lissé avec `setTargetAtTime`, distance pouce–index rapportée à la largeur de paume en tenant compte du format vidéo. Un balayage n’est accepté que dans la bande haute, paume ouverte, avec déplacement horizontal suffisant et délai de répétition. Les styles Acoustique, Jazz, Électrique et Ambient modifient un filtre, un waveshaper, un écho et la réverbération sur les banques déjà installées. Ce sont des traitements sonores, pas une génération automatique de musique ni de nouveaux échantillons de guitare électrique.
+
+La nouvelle guitare assistée abandonne le contact précis avec six fines lignes pour les accords et la mélodie. Le mode libre reste disponible. Les seuils sont couverts par des traces synthétiques et le son par des rendus hors ligne ; le confort avec les mains du joueur reste à évaluer en conditions réelles.
 
 ## Mise à jour : contact immédiat, guitare et performances
 

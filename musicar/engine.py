@@ -37,6 +37,8 @@ class CameraEngine:
 
     def _events(self, events):
         for event in events:
+            if event["kind"] == "style":
+                self.revision += 1
             self.event_id += 1
             self.events.append({**event, "id": self.event_id})
 
@@ -100,7 +102,8 @@ class CameraEngine:
                     "event_id": self.event_id, "events": [e.copy() for e in self.events if e["id"] > after],
                     "hands": self.hands, "fps": round(self.fps, 1),
                     "inference_ms": round(self.inference_ms, 1), "width": self.width, "height": self.height,
-                    "revision": self.revision, "guitar": self.tracker.guitar, "compute":self.compute}, self.jpeg
+                    "revision": self.revision, "guitar": self.tracker.guitar,
+                    "performance":self.tracker.performance, "compute":self.compute}, self.jpeg
 
     def claim_external(self, owner):
         with self.lock:

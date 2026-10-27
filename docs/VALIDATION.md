@@ -35,3 +35,26 @@ Référence : https://storage.googleapis.com/mediapipe-assets/right_hands.jpg
 Tests officiels : https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/python/test/vision/hand_landmarker_test.py
 
 Rapports bruts locaux : `artifacts/hybrid-web-validation.json`, `artifacts/gpu-web-validation.json`, `artifacts/cpu-web-validation.json`, `artifacts/audio-validation.json`.
+
+## Mise à jour du 27 octobre 2026 — expression et jeu musical
+
+- 49 tests Python réussis : nouveaux réglages validés, pitch normalisé et retour à zéro, balayages limités à la bande haute, délai entre styles, accords stabilisés, grattage dans les deux sens, pause poing fermé, pincements réarmables, frappes répétées au piano et sur les pads, vitesse et traversée rapide, transport WebSocket.
+- Tests JavaScript audio : comportement historique, modulation des voix actives, cumul transposition/pitch, lissage, percussions indépendantes. Tests de l’interface sur DOM simulé : piano, six accords, quatre pincements, six cordes libres, six pads, styles et contrôles contextuels.
+- Diagnostic audio exécuté dans le navigateur intégré : 17 échantillons piano + 8 guitare décodés, graphe audio complet, 12 combinaisons instrument/style. Tous les rendus ont un signal non nul et une crête inférieure à 1 (maximum observé environ 0,725). Transposition +2 demi-tons et pitch +0,5 testés pendant le rendu. Rapport : `artifacts/expression-audio-validation.json`.
+- Le lanceur du diagnostic dans une WebView cachée n’a pas abouti dans cet essai (timeout). La même page de diagnostic a abouti dans le navigateur intégré. Les mesures historiques WebView2 ci-dessus restent des résultats du 14 octobre.
+- Interface inspectée dans le navigateur intégré : sélection guitare, style électrique, accord à la souris ; nouveaux contrôles visibles et six boutons d’accords présents. Capture : `artifacts/expression-guitar.png`.
+- La webcam n’a pas été ouverte pour cette mise à jour. Ces essais valident la logique et la production audio, pas encore le confort instrumental, les occultations réelles ou la latence complète avec les mains du joueur.
+
+
+## Correction après essai utilisateur — guitare au poignet droit
+
+Le mode accords déclenchait auparavant six notes depuis le mouvement du poignet, ce qui ne correspondait pas au contact visuel attendu. Il utilise maintenant les contacts des doigts avec chaque corde, dans un repère attaché au poignet droit. Les mouvements communs au poignet et aux doigts ne déclenchent aucune attaque. La main gauche sélectionne toujours l’accord ; ses cercles de doigts sont supprimés.
+
+53 tests Python passent, dont contact individuel, maintien avec tremblement, sortie et retour, doublons entre doigts, traversée des six cordes dans l’ordre, perte/reprise du suivi et translation de toute la guitare. Les tests JavaScript vérifient l’absence de cercles à gauche, leur maintien à droite, les instants audio distincts et l’étouffement d’une corde au moment de la nouvelle attaque. Ces tests rejouent des positions synthétiques ; le confort final avec les doigts du joueur reste à confirmer.
+
+
+## Correction des gestes d’expression à hauteur normale
+
+L’ancienne restriction à la bande haute empêchait les gestes faits devant l’instrument. Le pitch pouce–index et le balayage de la main de contrôle fonctionnent maintenant partout par défaut ; le mode bande haute reste une option explicite. Le balayage utilise le centre de la paume, accepte une ouverture naturelle de trois doigts et exige une dominante horizontale. La main de jeu ne peut pas changer accidentellement le style quand l’autre main est choisie pour les commandes. Une ligne entre pouce et index et la valeur du pitch rendent la commande visible, sans ajouter de cercles à gauche.
+
+56 tests Python passent, plus les tests audio et de rendu JavaScript. Les cas ajoutés couvrent le pitch positif/négatif à hauteur de jeu, le balayage à hauteur normale, le choix de la main et le maintien de l’accord pendant un pincement. Le contrôle de la fenêtre Edge a été interrompu par l’outil, qui n’a pas pu vérifier l’adresse du navigateur ; le rechargement de l’onglet reste à faire par le joueur.

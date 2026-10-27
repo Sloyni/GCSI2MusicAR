@@ -21,6 +21,21 @@ class Settings(BaseModel):
     sensitivity: float = Field(default=0.6, ge=0, le=1)
     mirror: bool = True
     fingers: list[Literal["thumb", "index", "middle", "ring", "pinky"]] = ["index", "middle"]
+    music_style: Literal["acoustic", "jazz", "electric", "ambient"] = "acoustic"
+    tone: float = Field(default=.6, ge=0, le=1)
+    transpose: int = Field(default=0, ge=-12, le=12)
+    pitch_gesture: bool = False
+    pitch_range: int = Field(default=2, ge=1, le=12)
+    pitch_neutral: float = Field(default=.8, ge=.15, le=2.5)
+    control_hand: Literal["left", "right"] = "left"
+    style_swipe: bool = True
+    expression_zone: Literal["anywhere", "top"] = "anywhere"
+    guitar_mode: Literal["chords", "melody", "strings"] = "chords"
+    guitar_chord: Literal["C", "G", "Am", "F", "Dm", "Em"] = "C"
+    piano_mode: Literal["contact", "strike"] = "contact"
+    drum_mode: Literal["strike", "contact"] = "strike"
+    scale: Literal["chromatic", "major", "minor", "pentatonic"] = "chromatic"
+    root: int = Field(default=0, ge=0, le=11)
 
     @model_validator(mode="after")
     def bounds(self):
@@ -52,10 +67,16 @@ class Layout:
                 self.keys.append(dict(note=note, label=note_name(note), black=True,
                                       x=settings.x + (i + 1) * step - step * 0.30,
                                       y=settings.y, width=step * 0.60, height=settings.height * 0.63))
-        self.pads = [dict(note=note, label=label, x=settings.x + settings.width * fraction,
-                          y=self.line + settings.height * 0.25, radius=min(settings.width / 9, settings.height * 0.48))
-                     for note, label, fraction in [("kick", "KICK", .13), ("snare", "SNARE", .38),
-                                                   ("hat", "HI-HAT", .63), ("tom", "TOM", .88)]]
+        intervals = {"chromatic": range(12), "major": (0,2,4,5,7,9,11),
+                     "minor": (0,2,3,5,7,8,10), "pentatonic": (0,2,4,7,9)}[settings.scale]
+        for key in self.keys:
+            key["enabled"] = (key["note"] - settings.root) % 12 in intervals
+        self.pads = [dict(note=note, label=label, x=settings.x + settings.width * px,
+                         y=settings.y + settings.height * py,
+                         radius=min(settings.width / 11, settings.height * .23))
+                     for note, label, px, py in [("kick", "KICK", .18, .73), ("snare", "SNARE", .5, .73),
+                         ("hat", "HI-HAT", .18, .23), ("tom", "TOM", .82, .73),
+                         ("crash", "CRASH", .82, .23), ("openhat", "OPEN HAT", .5, .23)]]
 
     def hit(self, x: float, y: float):
         s = self.settings
@@ -71,7 +92,7 @@ class Layout:
         # Black keys win only inside their actual drawn rectangle.
         for key in sorted(self.keys, key=lambda k: not k["black"]):
             if key["x"] <= x < key["x"] + key["width"] and y <= key["y"] + key["height"]:
-                return key["note"]
+                return key["note"] if key["enabled"] else None
         return None
 
     def dump(self):
@@ -119,7 +140,8 @@ class ContactTracker(ContactBase):
                     events.append(dict(kind="off", note=old_note, source=source))
                 if note is not None:
                     speed = math.hypot(x - previous.x, y - previous.y) / max(.008, now - previous.seen) if previous else .6
-                    velocity = min(1, max(.65, .65 + speed * .30 * self.settings.sensitivity))
+                    velocity = min(1, max(.25, .7 * (1-self.settings.sensitivity) +
+                                             (.25 + speed * .45) * self.settings.sensitivity))
                     events.append(dict(kind="on", note=note, source=source, velocity=round(velocity, 3)))
             self.states[source] = FingerState(x=x, y=y, seen=now, note=note)
         for source, previous in list(self.states.items()):
@@ -234,22 +256,35 @@ class GuitarTracker:
 
 class InstrumentTracker:
     def __init__(self, settings):
+        from .performance import ExpressionTracker, AssistedGuitarTracker, StrikeTracker
         self.settings=settings
         self.contact=ContactTracker(settings)
-        self.strings=GuitarTracker(settings)
+        self.strings=GuitarTracker(settings) if settings.guitar_mode=="strings" else AssistedGuitarTracker(settings)
+        self.strikes=StrikeTracker(settings)
+        self.expression=ExpressionTracker(settings)
         self.layout=self.contact.layout
+
+    @property
+    def performance(self):
+        return self.expression.value
 
     @property
     def guitar(self):
         return self.strings.guitar
 
     def reset(self,settings=None):
-        events=self.contact.reset()+self.strings.reset()
+        events=self.contact.reset()+self.strings.reset()+self.strikes.reset()
+        self.expression.reset()
         if settings:self.__init__(settings)
         return events
 
     def update(self,points,now,hands=None,width=960,height=540):
+        expression=self.expression.update(hands or [],width,height,now)
         if self.settings.instrument=="guitar":
-            return self.strings.update(hands or [],width,height,now)
-        return self.contact.update(points,now)
+            if self.settings.guitar_mode=="strings":
+                return expression+self.strings.update(hands or [],width,height,now)
+            return expression+self.strings.update(hands or [],width,height,now,self.expression.value)
+        mode=self.settings.drum_mode if self.settings.instrument=="drums" else self.settings.piano_mode
+        tracker=self.strikes if mode=="strike" else self.contact
+        return expression+tracker.update(points,now)
 
